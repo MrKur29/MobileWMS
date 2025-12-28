@@ -769,49 +769,106 @@
     // QR modal
     async function openScan(){
       if (scanning) return;
+
+      if (!palletId){
+        setStatus('Pilih pallet terlebih dahulu.', 'err');
+        beep(false);
+        return;
+      }
+
+      // Tampilkan modal dulu (penting untuk iOS Safari agar ukuran video terhitung)
       scanModal.style.display = 'flex';
-      setScanStatus('Mengaktifkan kamera...', '');
+      setScanStatus('Meminta izin kamera...', '');
 
       if (!qr){
         qr = new Html5Qrcode("qr-region");
       }
 
+      // Delay sedikit agar DOM/layout siap sebelum start()
+      await new Promise(res => setTimeout(res, 180));
+
       scanning = true;
 
       try{
+        // Ambil daftar kamera, lalu pilih kamera belakang bila ada
+        const cams = await Html5Qrcode.getCameras();
+        if (!cams || !cams.length){
+          throw new Error('Tidak ada kamera yang terdeteksi di browser ini.');
+        }
+
+        // heuristik pilih back camera
+        let chosen = cams[0];
+        const back = cams.find(c => (c.label || '').toLowerCase().includes('back') || (c.label || '').toLowerCase().includes('rear'));
+        if (back) chosen = back;
+
+        const cameraConfig = chosen?.id
+          ? { deviceId: { exact: chosen.id } }
+          : { facingMode: "environment" };
+
         await qr.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 260, height: 260 } },
+          cameraConfig,
+          {
+            fps: 10,
+            // qrbox number lebih kompatibel di beberapa browser dibanding object {width,height}
+            qrbox: 260,
+            // iOS Safari kadang lebih stabil jika disable mirror
+            disableFlip: true
+          },
           async (decodedText) => {
             const id = normalizeKarungId(decodedText);
             if (!id) return;
-            // stop quickly to avoid double reads
+
+            // stop cepat untuk mencegah double scan
             await closeScan(true);
             await addKarung(id);
           },
           (_err) => {}
         );
+
         setScanStatus('Kamera aktif. Arahkan ke QR/Barcode.', 'ok');
       }catch(e){
         console.error(e);
-        setScanStatus('Gagal akses kamera: ' + (e?.message || e), 'err');
         scanning = false;
+
+        const msg = (e?.message || String(e));
+        let help = msg;
+
+        help += `
+
+Checklist:
+1) Pastikan halaman dibuka via HTTPS (GitHub Pages selalu HTTPS).
+2) Pastikan izin kamera untuk browser sudah di-Allow.
+3) iPhone/iPad: Settings → Safari/Chrome → Camera → Allow.
+4) Jangan buka via file:// (langsung dari file manager), kamera biasanya diblokir.
+5) Coba refresh setelah mengizinkan kamera.`;
+setScanStatus(help, 'err');
+        beep(false);
       }
     }
 
-    async function closeScan(skipHide){
+    async function closeScan(_skip){
       try{
         if (qr && scanning){
           await qr.stop();
+        }
+      }catch(e){}
+      try{
+        if (qr){
           await qr.clear();
         }
       }catch(e){}
       scanning = false;
-      if (!skipHide) scanModal.style.display = 'none';
-      else scanModal.style.display = 'none';
+      scanModal.style.display = 'none';
+      setScanStatus('', '');
+    }
+
+    // Close scan with explicit button/backdrop
+    async function closeScanFromUI(){
+      await closeScan(false);
     }
 
     // Auth flows
+
     async function init(){
       if (!isConfigOk()){
         setLoginStatus('Konfigurasi Supabase belum diisi (SUPABASE_URL & SUPABASE_ANON_KEY).', 'err');
@@ -904,8 +961,8 @@
     });
 
     btnOpenScan.addEventListener('click', openScan);
-    btnCloseScan.addEventListener('click', () => closeScan(false));
-    scanModal.addEventListener('click', (e) => { if (e.target === scanModal) closeScan(false); });
+    btnCloseScan.addEventListener('click', closeScanFromUI);
+    scanModal.addEventListener('click', (e) => { if (e.target === scanModal) closeScanFromUI(); });
 
     btnAdd.addEventListener('click', () => addKarung(karungInput.value));
     karungInput.addEventListener('keydown', (e) => {
