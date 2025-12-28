@@ -213,6 +213,8 @@
     .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
 
     /* scanner sheet */
+    #qr-region video{width:100% !important; height:auto !important; display:block !important;}
+    #qr-region canvas{max-width:100% !important;}
     #qr-region{width:100%; border-radius: 16px; overflow:hidden; border:1px solid rgba(255,255,255,.12); min-height:320px; }
   </style>
 </head>
@@ -845,47 +847,76 @@
         return;
       }
 
-      // Tampilkan modal, lalu start camera dengan facingMode (pattern paling kompatibel di mobile).
+      // Tampilkan modal, lalu start camera
       scanModal.style.display = 'flex';
       setScanStatus('Mengaktifkan kamera...', '');
+
+      // reset diagnostics UI
+      try{ diagBox.style.display='none'; camTestVideo.style.display='none'; }catch(_e){}
 
       if (!qr){
         qr = new Html5Qrcode("qr-region");
       }
 
-      // Pastikan layout sudah jadi sebelum start (terutama iOS Safari)
-      await new Promise(res => setTimeout(res, 200));
+      // Pastikan layout siap sebelum start (terutama iOS/Android WebView)
+      await new Promise(res => setTimeout(res, 220));
 
       scanning = true;
 
-      // Timeout guard agar tidak menggantung tanpa prompt
+      // Timeout guard agar tidak menggantung
       const withTimeout = (p, ms) => Promise.race([
         p,
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: izin kamera tidak muncul.')), ms))
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: kamera tidak mulai.')), ms))
       ]);
 
       try{
         const config = {
           fps: 10,
-          qrbox: { width: 260, height: 260 }
+          qrbox: { width: 260, height: 260 },
+          disableFlip: true
         };
+
+        // Pilih kamera belakang via deviceId (lebih reliable di Android)
+        let cameraConfig = { facingMode: "environment" };
+        try{
+          const cams = await Html5Qrcode.getCameras();
+          if (cams && cams.length){
+            const back = cams.find(c => (c.label||'').toLowerCase().includes('back')) || cams[cams.length-1];
+            if (back && back.id){
+              cameraConfig = { deviceId: { exact: back.id } };
+              setScanStatus('Mengaktifkan kamera (' + (back.label || 'back camera') + ')...', '');
+            }
+          }
+        }catch(_e){
+          // ignore, fallback facingMode
+        }
 
         await withTimeout(
           qr.start(
-            { facingMode: "environment" },
+            cameraConfig,
             config,
             async (decodedText) => {
               const id = normalizeKarungId(decodedText);
               if (!id) return;
 
-              // Stop cepat untuk menghindari double-scan
               await closeScan(true);
               await addKarung(id);
             },
             () => {}
           ),
-          9000
+          12000
         );
+
+        // Pastikan elemen video terlihat (beberapa Android butuh style enforcement)
+        setTimeout(() => {
+          const v = document.querySelector('#qr-region video');
+          if (v){
+            v.setAttribute('playsinline','');
+            v.style.width = '100%';
+            v.style.height = 'auto';
+            v.style.display = 'block';
+          }
+        }, 120);
 
         setScanStatus('Kamera aktif. Arahkan ke QR/Barcode.', 'ok');
       }catch(e){
@@ -896,10 +927,10 @@
         const help = msg + `
 
 Checklist:
-1) Pastikan buka dari Safari/Chrome (bukan in-app browser WhatsApp/IG).
+1) Pastikan buka dari Chrome (Android) atau Safari (iOS), bukan in-app browser.
 2) Pastikan izin kamera untuk domain GitHub Pages = Allow.
-3) Coba reload halaman setelah mengizinkan kamera.
-4) Jika iPhone: aA → Website Settings → Camera → Allow.`;
+3) Tutup tab lain yang sedang memakai kamera.
+4) Coba reload halaman.`;
 
         setScanStatus(help, 'err');
         beep(false);
