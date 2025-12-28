@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Form Input Karung ke Pallet (Mobile)</title>
+
+  <!-- Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- QR scanner -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1a33;
+      --text:#eef2ff;
+      --muted:#b6c2ff;
+      --line:rgba(255,255,255,.12);
+      --primary:#1f4ad8; /* navy */
+      --danger:#d11a2a;  /* red */
+      --ok:#19b37a;
+      --warn:#f4c430;
+
+      --r:18px;
+      --pad:14px;
+
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --shadow2: 0 6px 18px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:
+        radial-gradient(1200px 600px at 10% 0%, rgba(31,74,216,.25), transparent 55%),
+        radial-gradient(1000px 520px at 95% 20%, rgba(209,26,42,.20), transparent 55%),
+        var(--bg);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      padding-bottom: 96px; /* sticky actions */
+    }
+    .wrap{max-width:760px; margin:0 auto; padding: env(safe-area-inset-top) 14px 0 14px;}
+    .top{
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 12px 0 10px;
+      background: linear-gradient(to bottom, rgba(11,18,32,.96), rgba(11,18,32,.75), rgba(11,18,32,0));
+      backdrop-filter: blur(10px);
+    }
+    .brand{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+    .title{font-size: 16px; font-weight: 800; letter-spacing:.2px;}
+    .sub{font-size: 12px; color: var(--muted); margin-top: 2px;}
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .btn{
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 800;
+      font-size: 14px;
+      color: white;
+      background: rgba(255,255,255,.08);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow2);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{background: linear-gradient(135deg, rgba(31,74,216,.95), rgba(31,74,216,.70)); border-color: rgba(31,74,216,.9)}
+    .btn.danger{background: linear-gradient(135deg, rgba(209,26,42,.95), rgba(209,26,42,.70)); border-color: rgba(209,26,42,.9)}
+    .btn.ghost{background: rgba(255,255,255,.06)}
+    .btn.small{padding: 9px 11px; font-size: 13px; border-radius: 12px; box-shadow:none}
+    .btn:disabled{opacity:.55; cursor:not-allowed}
+
+    .card{
+      margin-top: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-h{
+      padding: 12px var(--pad);
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(0,0,0,.12);
+    }
+    .card-h .h{font-weight: 850; font-size: 14px;}
+    .card-h .p{color: var(--muted); font-size: 12px; margin-top:3px;}
+    .card-b{padding: 12px var(--pad);}
+
+    .grid{display:grid; gap:10px;}
+    .grid2{grid-template-columns: 1fr 1fr;}
+    @media (max-width: 420px){ .grid2{grid-template-columns: 1fr;} }
+
+    label{display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 700;}
+    input, select, textarea{
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      outline: none;
+      font-size: 15px;
+    }
+    textarea{min-height: 64px; resize: vertical;}
+    input:disabled, select:disabled, textarea:disabled{opacity:.6}
+
+    .hint{font-size: 12px; color: rgba(238,242,255,.78); margin-top: 6px; line-height:1.35}
+    .line{height:1px; background: var(--line); margin: 12px 0;}
+    .status{
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .status.ok{border-color: rgba(25,179,122,.45); background: rgba(25,179,122,.14)}
+    .status.err{border-color: rgba(209,26,42,.55); background: rgba(209,26,42,.14)}
+    .status.warn{border-color: rgba(244,196,48,.55); background: rgba(244,196,48,.14)}
+
+    .row{display:flex; gap:10px; align-items:center;}
+    .row > *{flex:1}
+    .row .fit{flex:0 0 auto}
+
+    /* list */
+    .list-item{
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.18);
+    }
+    .li-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+    .li-id{font-weight: 900; font-size: 13px;}
+    .li-sub{font-size: 12px; color: var(--muted); margin-top:4px; line-height:1.25}
+    .pill{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .pill.ok{border-color: rgba(25,179,122,.45); background: rgba(25,179,122,.14); color:#eafff5}
+    .pill.bad{border-color: rgba(209,26,42,.55); background: rgba(209,26,42,.14); color:#ffecec}
+
+    /* sticky actions */
+    .actions{
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      background: linear-gradient(to top, rgba(11,18,32,.98), rgba(11,18,32,.78), rgba(11,18,32,0));
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255,255,255,.08);
+      z-index: 30;
+    }
+    .actions .inner{
+      max-width: 760px;
+      margin: 0 auto;
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 420px){ .actions .inner{grid-template-columns: 1fr;} }
+
+    /* modal bottom sheet */
+    .modal{position: fixed; inset: 0; background: rgba(0,0,0,.55); display:none; align-items:flex-end; z-index: 60;}
+    .sheet{
+      width:100%; max-width:760px; margin:0 auto;
+      border-radius: 22px 22px 0 0;
+      border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(15,26,51,.98), rgba(15,26,51,.92));
+      box-shadow: 0 -30px 60px rgba(0,0,0,.55);
+      overflow: hidden;
+      max-height: 85vh;
+      display:flex; flex-direction:column;
+    }
+    .sheet-h{
+      padding: 12px 14px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+    }
+    .sheet-h .h{font-weight: 950}
+    .sheet-b{padding: 12px 14px; overflow:auto}
+    .kv{
+      display:flex; justify-content:space-between; gap:10px;
+      padding: 10px 0;
+      border-bottom: 1px dashed rgba(255,255,255,.14);
+      font-size: 13px;
+    }
+    .kv b{font-weight: 900}
+    .kv span{color: var(--muted)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+
+    /* scanner sheet */
+    #qr-region{width:100%; border-radius: 16px; overflow:hidden; border:1px solid rgba(255,255,255,.12);}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div>
+          <div class="title">Input Karung ke Pallet (Mobile)</div>
+          <div class="sub">Pilih pallet → scan/ketik karung → simpan massal.</div>
+        </div>
+        <div class="chip" id="userChip">Belum login</div>
+      </div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="card" id="loginCard">
+      <div class="card-h">
+        <div>
+          <div class="h">Login</div>
+          <div class="p">Gunakan akun Supabase Auth.</div>
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="grid">
+          <div>
+            <label>Email</label>
+            <input id="email" type="email" autocomplete="username" placeholder="email@domain.com" />
+          </div>
+          <div>
+            <label>Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+          </div>
+          <button class="btn primary" id="btnLogin">Login</button>
+          <div class="status" id="loginStatus" style="display:none;"></div>
+          <div class="hint">
+            Catatan: isi <b>SUPABASE_URL</b> dan <b>SUPABASE_ANON_KEY</b> di skrip file ini (samakan dengan web utama Anda).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORM -->
+    <div class="card" id="formCard" style="display:none;">
+      <div class="card-h">
+        <div>
+          <div class="h">Pallet Tujuan</div>
+          <div class="p">Wajib pilih pallet dulu, lalu input karung (multiple).</div>
+        </div>
+        <button class="btn small ghost" id="btnLogout">Logout</button>
+      </div>
+
+      <div class="card-b">
+        <div class="grid grid2">
+          <div>
+            <label>Pallet</label>
+            <select id="palletSelect" disabled>
+              <option value="">-- Pilih pallet --</option>
+            </select>
+            <div class="hint">Daftar dari <span class="mono">master_pallet</span>.</div>
+          </div>
+          <div>
+            <label>Mode Input</label>
+            <select id="modeSelect" disabled>
+              <option value="scan">Scan QR/Barcode</option>
+              <option value="manual">Ketik karung_id</option>
+            </select>
+            <div class="hint">Scan disarankan agar cepat & minim typo.</div>
+          </div>
+        </div>
+
+        <div class="line"></div>
+
+        <div class="row">
+          <div>
+            <label>karung_id</label>
+            <input id="karungInput" type="text" class="mono" placeholder="KRG-YYMMDD####" disabled />
+            <div class="hint">Jika scanner membaca format panjang, sistem akan ambil bagian sebelum tanda <span class="mono">|</span>.</div>
+          </div>
+          <div class="fit">
+            <button class="btn small primary" id="btnOpenScan" disabled>Scan</button>
+          </div>
+          <div class="fit">
+            <button class="btn small ghost" id="btnAdd" disabled>+ Tambah</button>
+          </div>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label>Catatan (opsional)</label>
+            <textarea id="catatan" placeholder="Contoh: putaway dari chiller / pindah area / dll"></textarea>
+          </div>
+        </div>
+
+        <div class="line"></div>
+
+        <div class="row" style="margin-bottom:8px;">
+          <div>
+            <div style="font-weight:900; font-size:14px;">Daftar Karung</div>
+            <div class="sub">Karung yang akan dimasukkan ke pallet terpilih.</div>
+          </div>
+          <div class="fit"><span class="pill" id="countPill">0 karung</span></div>
+        </div>
+
+        <div id="list"></div>
+
+        <div class="status" id="formStatus" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky actions -->
+  <div class="actions">
+    <div class="inner">
+      <button class="btn primary" id="btnPreview" disabled>Submit (Konfirmasi)</button>
+      <button class="btn danger" id="btnSave" disabled>Simpan</button>
+      <button class="btn ghost" id="btnClear" disabled>Clear</button>
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div class="modal" id="confirmModal">
+    <div class="sheet">
+      <div class="sheet-h">
+        <div class="h">Konfirmasi Input Pallet</div>
+        <button class="btn small ghost" id="btnCloseConfirm">Tutup</button>
+      </div>
+      <div class="sheet-b">
+        <div id="confirmBody"></div>
+        <div class="status warn" style="margin-top:12px;">
+          Setelah simpan, lokasi_penyimpanan setiap karung akan di-update menjadi pallet tujuan.
+        </div>
+        <div class="hint">
+          Jika Anda sudah punya RPC khusus pindah lokasi, ganti bagian <span class="mono">save()</span> agar memanggil RPC tersebut.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner modal -->
+  <div class="modal" id="scanModal">
+    <div class="sheet">
+      <div class="sheet-h">
+        <div class="h">Scan karung_id</div>
+        <button class="btn small ghost" id="btnCloseScan">Tutup</button>
+      </div>
+      <div class="sheet-b">
+        <div id="qr-region"></div>
+        <div class="status" id="scanStatus" style="margin-top:10px; display:none;"></div>
+        <div class="hint">Arahkan kamera ke QR/Barcode. Setelah terbaca, sistem otomatis tambah ke daftar.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * WAJIB diisi (samakan dengan web utama Anda).
+     */
+    const SUPABASE_URL = 'https://zdkcuprmdtxahrxhgucy.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpka2N1cHJtZHR4YWhyeGhndWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyMjYxMjQsImV4cCI6MjA3OTgwMjEyNH0.z_OA2XvyY2VqOpBwHLmpQ1rE5PD3y8eGP_GGbEZpl3E';
+
+    // Nama tabel/kolom (sesuaikan kalau beda)
+    const TABLE_MASTER_PALLET = 'master_pallet';
+    const TABLE_STOK_KARUNG   = 'stok_karung';
+    const TABLE_LOG_KARUNG    = 'log_karung';
+
+    // Kolom yang diasumsikan ada:
+    // stok_karung: karung_id, item_id, qty_ekor_sisa, qty_kg_sisa, status_karung, lokasi_penyimpanan, last_location_update
+    // log_karung: waktu_log (atau timestamp), karung_id, perubahan_ekor, perubahan_kg, sisa_ekor_setelah, sisa_kg_setelah, jenis_perubahan, keterangan, operator
+    //
+    // Jika schema Anda berbeda, ubah bagian select/insert.
+
+    const isConfigOk = () =>
+      SUPABASE_URL && SUPABASE_ANON_KEY &&
+      !SUPABASE_URL.includes("PASTE_") && !SUPABASE_ANON_KEY.includes("PASTE_");
+
+    let sb = null;
+
+    // UI refs
+    const userChip = document.getElementById('userChip');
+    const loginCard = document.getElementById('loginCard');
+    const formCard  = document.getElementById('formCard');
+    const emailEl = document.getElementById('email');
+    const passEl  = document.getElementById('password');
+    const btnLogin = document.getElementById('btnLogin');
+    const btnLogout = document.getElementById('btnLogout');
+    const loginStatus = document.getElementById('loginStatus');
+
+    const palletSelect = document.getElementById('palletSelect');
+    const modeSelect   = document.getElementById('modeSelect');
+    const karungInput  = document.getElementById('karungInput');
+    const btnOpenScan  = document.getElementById('btnOpenScan');
+    const btnAdd       = document.getElementById('btnAdd');
+    const catatanEl    = document.getElementById('catatan');
+
+    const listEl = document.getElementById('list');
+    const countPill = document.getElementById('countPill');
+
+    const btnPreview = document.getElementById('btnPreview');
+    const btnSave = document.getElementById('btnSave');
+    const btnClear = document.getElementById('btnClear');
+    const formStatus = document.getElementById('formStatus');
+
+    const confirmModal = document.getElementById('confirmModal');
+    const btnCloseConfirm = document.getElementById('btnCloseConfirm');
+    const confirmBody = document.getElementById('confirmBody');
+
+    const scanModal = document.getElementById('scanModal');
+    const btnCloseScan = document.getElementById('btnCloseScan');
+    const scanStatus = document.getElementById('scanStatus');
+
+    // state
+    let palletId = '';
+    let rows = []; // {karung_id, ok, reason, meta}
+    let lastPreview = null;
+
+    // QR
+    let qr = null;
+    let scanning = false;
+
+    function setLoginStatus(msg, kind){
+      loginStatus.style.display = msg ? '' : 'none';
+      loginStatus.textContent = msg || '';
+      loginStatus.className = 'status' + (kind ? (' ' + kind) : '');
+    }
+    function setStatus(msg, kind){
+      formStatus.style.display = msg ? '' : 'none';
+      formStatus.textContent = msg || '';
+      formStatus.className = 'status' + (kind ? (' ' + kind) : '');
+    }
+    function setScanStatus(msg, kind){
+      scanStatus.style.display = msg ? '' : 'none';
+      scanStatus.textContent = msg || '';
+      scanStatus.className = 'status' + (kind ? (' ' + kind) : '');
+    }
+
+    function normalizeKarungId(raw){
+      const s = (raw || '').trim();
+      if (!s) return '';
+      // Jika scanner baca: KRG-xxx|ITEM|DATE|... => ambil sebelum "|"
+      return s.split('|')[0].trim();
+    }
+
+    function beep(ok){
+      try{
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine';
+        o.frequency.value = ok ? 880 : 220;
+        g.gain.value = 0.12;
+        o.start();
+        setTimeout(() => { o.stop(); ctx.close(); }, ok ? 90 : 140);
+      }catch(e){}
+    }
+
+    function updateCount(){
+      const n = rows.length;
+      countPill.textContent = `${n} karung`;
+    }
+
+    function renderList(){
+      listEl.innerHTML = '';
+      updateCount();
+
+      if (!rows.length){
+        const e = document.createElement('div');
+        e.className = 'status warn';
+        e.textContent = 'Belum ada karung. Scan atau ketik karung_id lalu tekan "+ Tambah".';
+        listEl.appendChild(e);
+        return;
+      }
+
+      rows.forEach((r, idx) => {
+        const box = document.createElement('div');
+        box.className = 'list-item';
+
+        const top = document.createElement('div');
+        top.className = 'li-top';
+
+        const left = document.createElement('div');
+        left.innerHTML = `
+          <div class="li-id mono">${r.karung_id}</div>
+          <div class="li-sub">
+            ${r.meta?.item_id ? `Item: <span class="mono">${r.meta.item_id}</span> • ` : ''}
+            ${r.meta?.status_karung ? `Status: <span class="mono">${r.meta.status_karung}</span> • ` : ''}
+            ${r.meta?.lokasi_penyimpanan ? `Lokasi: <span class="mono">${r.meta.lokasi_penyimpanan}</span>` : 'Lokasi: -'}
+          </div>
+        `;
+
+        const right = document.createElement('div');
+        right.style.display = 'flex';
+        right.style.flexDirection = 'column';
+        right.style.gap = '8px';
+        right.style.alignItems = 'flex-end';
+
+        const pill = document.createElement('span');
+        pill.className = 'pill ' + (r.ok ? 'ok' : 'bad');
+        pill.textContent = r.ok ? 'OK' : 'TIDAK VALID';
+        right.appendChild(pill);
+
+        const del = document.createElement('button');
+        del.className = 'btn small ghost';
+        del.textContent = 'Hapus';
+        del.onclick = () => { rows.splice(idx,1); renderList(); };
+        right.appendChild(del);
+
+        top.appendChild(left);
+        top.appendChild(right);
+
+        box.appendChild(top);
+
+        if (!r.ok && r.reason){
+          const st = document.createElement('div');
+          st.className = 'status err';
+          st.style.marginTop = '10px';
+          st.textContent = r.reason;
+          box.appendChild(st);
+        }
+
+        listEl.appendChild(box);
+      });
+    }
+
+    function enableForm(enabled){
+      palletSelect.disabled = !enabled;
+      modeSelect.disabled = !enabled;
+      karungInput.disabled = !enabled;
+      btnOpenScan.disabled = !enabled;
+      btnAdd.disabled = !enabled;
+
+      btnPreview.disabled = !enabled;
+      btnSave.disabled = !enabled;
+      btnClear.disabled = !enabled;
+    }
+
+    async function loadPallets(){
+      setStatus('Memuat daftar pallet...', '');
+      const { data, error } = await sb
+        .from(TABLE_MASTER_PALLET)
+        .select('pallet_id')
+        .order('pallet_id', { ascending: true });
+
+      if (error){
+        console.error(error);
+        setStatus('Gagal memuat pallet: ' + error.message, 'err');
+        return;
+      }
+
+      palletSelect.innerHTML = '<option value="">-- Pilih pallet --</option>';
+      (data || []).forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.pallet_id;
+        o.textContent = p.pallet_id;
+        palletSelect.appendChild(o);
+      });
+
+      setStatus('Pilih pallet untuk mulai input.', 'ok');
+    }
+
+    async function validateKarung(karungId){
+      // Lookup stok_karung
+      const { data, error } = await sb
+        .from(TABLE_STOK_KARUNG)
+        .select('karung_id, item_id, status_karung, lokasi_penyimpanan, qty_ekor_sisa, qty_kg_sisa')
+        .eq('karung_id', karungId)
+        .maybeSingle();
+
+      if (error){
+        return { ok:false, reason:'Lookup gagal: ' + error.message, meta:null };
+      }
+      if (!data){
+        return { ok:false, reason:'Karung tidak ditemukan di stok.', meta:null };
+      }
+
+      const status = String(data.status_karung || '').toLowerCase();
+
+      // aturan umum (silakan sesuaikan dengan aturan bisnis Anda)
+      if (status === 'draft') return { ok:false, reason:'Status karung masih DRAFT, tidak boleh dipalletkan.', meta:data };
+      if (status === 'habis') return { ok:false, reason:'Status karung HABIS, tidak boleh dipalletkan.', meta:data };
+      if (status === 'digabung') return { ok:false, reason:'Karung sudah DIGABUNG, tidak boleh dipalletkan.', meta:data };
+
+      // boleh jika tersedia/terbuka dll.
+      return { ok:true, reason:'', meta:data };
+    }
+
+    async function addKarung(raw){
+      const id = normalizeKarungId(raw);
+      if (!id){ setStatus('karung_id kosong.', 'err'); beep(false); return; }
+
+      if (!palletId){
+        setStatus('Pilih pallet terlebih dahulu.', 'err');
+        beep(false);
+        return;
+      }
+
+      // prevent duplicates
+      if (rows.some(x => x.karung_id === id)){
+        setStatus('Karung sudah ada di daftar.', 'warn');
+        beep(false);
+        karungInput.value = '';
+        return;
+      }
+
+      setStatus('Validasi karung ' + id + ' ...', '');
+      const v = await validateKarung(id);
+
+      rows.unshift({ karung_id:id, ok:v.ok, reason:v.reason, meta:v.meta });
+      renderList();
+      setStatus(v.ok ? 'Karung ditambahkan.' : 'Karung ditambahkan tapi tidak valid. Lihat detail.', v.ok ? 'ok' : 'warn');
+      beep(v.ok);
+
+      karungInput.value = '';
+    }
+
+    function validateForPreview(){
+      if (!palletId) return { ok:false, msg:'Pallet wajib dipilih.' };
+      if (!rows.length) return { ok:false, msg:'Belum ada karung.' };
+
+      const invalid = rows.filter(r => !r.ok);
+      if (invalid.length){
+        return { ok:false, msg:`Ada ${invalid.length} karung tidak valid. Hapus dulu sebelum simpan.` };
+      }
+
+      const list = rows.map(r => r.karung_id);
+      return {
+        ok:true,
+        data:{
+          pallet_id: palletId,
+          karung_ids: list,
+          catatan: (catatanEl.value || '').trim() || null
+        }
+      };
+    }
+
+    function openConfirm(preview){
+      confirmBody.innerHTML = '';
+
+      const mk = (k,v,mono=false) => {
+        const row = document.createElement('div');
+        row.className = 'kv';
+        row.innerHTML = `<b>${k}</b><span class="${mono?'mono':''}">${v}</span>`;
+        return row;
+      };
+
+      confirmBody.appendChild(mk('Pallet', preview.pallet_id, true));
+      confirmBody.appendChild(mk('Jumlah karung', String(preview.karung_ids.length), true));
+      confirmBody.appendChild(mk('Catatan', preview.catatan || '-', false));
+
+      const h = document.createElement('div');
+      h.style.marginTop = '12px';
+      h.style.fontWeight = '950';
+      h.textContent = 'Daftar karung';
+      confirmBody.appendChild(h);
+
+      preview.karung_ids.slice(0,120).forEach((id, i) => {
+        const x = document.createElement('div');
+        x.className = 'kv';
+        x.innerHTML = `<b>#${i+1}</b><span class="mono">${id}</span>`;
+        confirmBody.appendChild(x);
+      });
+
+      if (preview.karung_ids.length > 120){
+        const more = document.createElement('div');
+        more.className = 'status warn';
+        more.textContent = `List panjang (${preview.karung_ids.length}). Preview dibatasi 120 baris.`;
+        confirmBody.appendChild(more);
+      }
+
+      confirmModal.style.display = 'flex';
+    }
+    function closeConfirm(){ confirmModal.style.display = 'none'; }
+
+    async function save(){
+      if (!lastPreview){
+        setStatus('Belum ada konfirmasi. Tekan "Submit (Konfirmasi)".', 'err');
+        return;
+      }
+
+      btnSave.disabled = true;
+      setStatus('Menyimpan (update lokasi karung)...', '');
+
+      try{
+        const operator = (await sb.auth.getUser())?.data?.user?.email || null;
+        const nowIso = new Date().toISOString();
+
+        // 1) Update lokasi_penyimpanan untuk semua karung
+        // NOTE: update massal pakai in()
+        const { error: upErr } = await sb
+          .from(TABLE_STOK_KARUNG)
+          .update({
+            lokasi_penyimpanan: lastPreview.pallet_id,
+            last_location_update: nowIso
+          })
+          .in('karung_id', lastPreview.karung_ids);
+
+        if (upErr){
+          console.error(upErr);
+          setStatus('Gagal update lokasi: ' + upErr.message, 'err');
+          btnSave.disabled = false;
+          return;
+        }
+
+        // 2) Insert log per karung (opsional tapi direkomendasikan)
+        // Jika kolom waktu_log Anda bernama lain, sesuaikan.
+        const logRows = rows.map(r => ({
+          karung_id: r.karung_id,
+          perubahan_ekor: 0,
+          perubahan_kg: 0,
+          sisa_ekor_setelah: r.meta?.qty_ekor_sisa ?? null,
+          sisa_kg_setelah: r.meta?.qty_kg_sisa ?? null,
+          jenis_perubahan: 'pindah_lokasi',
+          keterangan: `ke pallet ${lastPreview.pallet_id}` + (lastPreview.catatan ? ` | ${lastPreview.catatan}` : ''),
+          operator: operator,
+          waktu_log: nowIso
+        }));
+
+        // beberapa schema tidak punya waktu_log; jika insert gagal, tetap anggap core update sukses
+        const { error: logErr } = await sb.from(TABLE_LOG_KARUNG).insert(logRows);
+        if (logErr){
+          console.warn('Log insert gagal (abaikan jika schema berbeda):', logErr);
+          setStatus('Lokasi berhasil diupdate, tapi gagal menulis log: ' + logErr.message, 'warn');
+        } else {
+          setStatus('Sukses! ' + lastPreview.karung_ids.length + ' karung masuk ke pallet ' + lastPreview.pallet_id, 'ok');
+        }
+
+        closeConfirm();
+        // reset form
+        rows = [];
+        lastPreview = null;
+        catatanEl.value = '';
+        karungInput.value = '';
+        renderList();
+
+        alert('Selesai.\nKarung masuk ke pallet: ' + lastPreview?.pallet_id);
+      } catch(err){
+        console.error(err);
+        setStatus('Error: ' + (err?.message || err), 'err');
+      } finally {
+        btnSave.disabled = false;
+      }
+    }
+
+    function clearAll(){
+      rows = [];
+      lastPreview = null;
+      catatanEl.value = '';
+      karungInput.value = '';
+      renderList();
+      setStatus('Form dibersihkan.', '');
+    }
+
+    // QR modal
+    async function openScan(){
+      if (scanning) return;
+      scanModal.style.display = 'flex';
+      setScanStatus('Mengaktifkan kamera...', '');
+
+      if (!qr){
+        qr = new Html5Qrcode("qr-region");
+      }
+
+      scanning = true;
+
+      try{
+        await qr.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 260, height: 260 } },
+          async (decodedText) => {
+            const id = normalizeKarungId(decodedText);
+            if (!id) return;
+            // stop quickly to avoid double reads
+            await closeScan(true);
+            await addKarung(id);
+          },
+          (_err) => {}
+        );
+        setScanStatus('Kamera aktif. Arahkan ke QR/Barcode.', 'ok');
+      }catch(e){
+        console.error(e);
+        setScanStatus('Gagal akses kamera: ' + (e?.message || e), 'err');
+        scanning = false;
+      }
+    }
+
+    async function closeScan(skipHide){
+      try{
+        if (qr && scanning){
+          await qr.stop();
+          await qr.clear();
+        }
+      }catch(e){}
+      scanning = false;
+      if (!skipHide) scanModal.style.display = 'none';
+      else scanModal.style.display = 'none';
+    }
+
+    // Auth flows
+    async function init(){
+      if (!isConfigOk()){
+        setLoginStatus('Konfigurasi Supabase belum diisi (SUPABASE_URL & SUPABASE_ANON_KEY).', 'err');
+        btnLogin.disabled = true;
+        return;
+      }
+
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.user) onAuthed(session.user);
+      else onLoggedOut();
+
+      sb.auth.onAuthStateChange((_event, session2) => {
+        if (session2?.user) onAuthed(session2.user);
+        else onLoggedOut();
+      });
+    }
+
+    function onAuthed(user){
+      userChip.textContent = user.email || 'Login';
+      loginCard.style.display = 'none';
+      formCard.style.display = '';
+      enableForm(true);
+
+      // load master pallet
+      loadPallets();
+
+      // default mode
+      modeSelect.value = 'scan';
+      karungInput.disabled = false;
+      btnOpenScan.disabled = false;
+      btnAdd.disabled = false;
+
+      renderList();
+      setTimeout(() => palletSelect?.focus(), 120);
+    }
+
+    function onLoggedOut(){
+      userChip.textContent = 'Belum login';
+      loginCard.style.display = '';
+      formCard.style.display = 'none';
+      enableForm(false);
+    }
+
+    // events
+    btnLogin.addEventListener('click', async () => {
+      setLoginStatus('', '');
+      btnLogin.disabled = true;
+      try{
+        const email = (emailEl.value || '').trim();
+        const password = (passEl.value || '').trim();
+        if (!email || !password){
+          setLoginStatus('Email dan password wajib diisi.', 'err');
+          return;
+        }
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error){
+          setLoginStatus('Gagal login: ' + error.message, 'err');
+          return;
+        }
+        setLoginStatus('Login sukses.', 'ok');
+      }catch(err){
+        setLoginStatus('Error: ' + (err?.message || err), 'err');
+      }finally{
+        btnLogin.disabled = false;
+      }
+    });
+
+    btnLogout.addEventListener('click', async () => {
+      try{ await sb.auth.signOut(); }catch(e){}
+    });
+
+    palletSelect.addEventListener('change', () => {
+      palletId = (palletSelect.value || '').trim();
+      if (palletId){
+        setStatus('Pallet dipilih: ' + palletId + '. Silakan scan/ketik karung.', 'ok');
+      }else{
+        setStatus('Pilih pallet terlebih dahulu.', 'warn');
+      }
+    });
+
+    modeSelect.addEventListener('change', () => {
+      const m = modeSelect.value;
+      if (m === 'manual'){
+        karungInput.placeholder = 'Ketik karung_id...';
+      } else {
+        karungInput.placeholder = 'Scan atau paste hasil scan...';
+      }
+    });
+
+    btnOpenScan.addEventListener('click', openScan);
+    btnCloseScan.addEventListener('click', () => closeScan(false));
+    scanModal.addEventListener('click', (e) => { if (e.target === scanModal) closeScan(false); });
+
+    btnAdd.addEventListener('click', () => addKarung(karungInput.value));
+    karungInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        addKarung(karungInput.value);
+      }
+    });
+
+    btnPreview.addEventListener('click', () => {
+      setStatus('', '');
+      const v = validateForPreview();
+      if (!v.ok){
+        setStatus(v.msg, 'err');
+        beep(false);
+        return;
+      }
+      lastPreview = v.data;
+      openConfirm(lastPreview);
+    });
+
+    btnSave.addEventListener('click', save);
+    btnClear.addEventListener('click', clearAll);
+
+    btnCloseConfirm.addEventListener('click', closeConfirm);
+    confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirm(); });
+
+    // init
+    init();
+  </script>
+</body>
+</html>
