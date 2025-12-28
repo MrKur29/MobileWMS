@@ -361,6 +361,14 @@
       </div>
       <div class="sheet-b">
         <div id="qr-region"></div>
+        <div class="line"></div>
+        <div class="row">
+          <button class="btn small ghost" id="btnTestCam" type="button">Test Kamera (Raw)</button>
+          <button class="btn small ghost" id="btnCopyDiag" type="button">Copy Diagnostics</button>
+        </div>
+        <video id="camTestVideo" playsinline muted autoplay style="width:100%; margin-top:10px; border-radius:16px; border:1px solid rgba(255,255,255,.12); display:none;"></video>
+        <pre id="diagBox" style="white-space:pre-wrap; background:rgba(0,0,0,.25); padding:10px; border-radius:14px; border:1px solid rgba(255,255,255,.12); margin-top:10px; display:none; font-size:12px; color:rgba(238,242,255,.9);"></pre>
+
         <div class="status" id="scanStatus" style="margin-top:10px; display:none;"></div>
         <div class="hint">Arahkan kamera ke QR/Barcode. Setelah terbaca, sistem otomatis tambah ke daftar.</div>
       </div>
@@ -421,6 +429,67 @@
     const confirmBody = document.getElementById('confirmBody');
 
     const scanModal = document.getElementById('scanModal');
+    const btnTestCam = document.getElementById('btnTestCam');
+    const btnCopyDiag = document.getElementById('btnCopyDiag');
+    const camTestVideo = document.getElementById('camTestVideo');
+    const diagBox = document.getElementById('diagBox');
+
+    let rawStream = null;
+
+    function showDiag(obj){
+      try{
+        diagBox.style.display = '';
+        diagBox.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+      }catch(e){
+        diagBox.style.display = '';
+        diagBox.textContent = String(obj);
+      }
+    }
+
+    async function gatherDiagnostics(){
+      const d = {
+        href: location.href,
+        isSecureContext: window.isSecureContext,
+        userAgent: navigator.userAgent,
+        hasMediaDevices: !!navigator.mediaDevices,
+        hasGetUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+        permissionsApi: !!navigator.permissions,
+      };
+
+      // permission state (best-effort)
+      if (navigator.permissions && navigator.permissions.query){
+        try{
+          const p = await navigator.permissions.query({ name: 'camera' });
+          d.cameraPermissionState = p.state;
+        }catch(e){
+          d.cameraPermissionState = 'unavailable';
+        }
+      }
+
+      // enumerate devices (best-effort)
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices){
+        try{
+          const devs = await navigator.mediaDevices.enumerateDevices();
+          d.devices = devs.map(x => ({ kind:x.kind, label:x.label, deviceId: x.deviceId ? 'present' : 'none' }));
+        }catch(e){
+          d.devicesError = e?.message || String(e);
+        }
+      }
+      return d;
+    }
+
+    async function stopRawStream(){
+      try{
+        if (rawStream){
+          rawStream.getTracks().forEach(t => t.stop());
+          rawStream = null;
+        }
+      }catch(e){}
+      camTestVideo.style.display = 'none';
+      camTestVideo.srcObject = null;
+    }
+
+
     const btnCloseScan = document.getElementById('btnCloseScan');
     const scanStatus = document.getElementById('scanStatus');
 
@@ -953,7 +1022,7 @@ Checklist:
 
     btnOpenScan.addEventListener('click', openScan);
     btnCloseScan.addEventListener('click', closeScanFromUI);
-    scanModal.addEventListener('click', (e) => { if (e.target === scanModal) closeScanFromUI(); });
+    scanModal.addEventListener('click', async (e) => { if (e.target === scanModal){ await stopRawStream(); await closeScanFromUI(); } });
 
     btnAdd.addEventListener('click', () => addKarung(karungInput.value));
     karungInput.addEventListener('keydown', (e) => {
@@ -981,7 +1050,46 @@ Checklist:
     btnCloseConfirm.addEventListener('click', closeConfirm);
     confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirm(); });
 
-    // init
+    // Diagnostics buttons
+    btnTestCam.addEventListener('click', async () => {
+      setScanStatus('Test kamera (raw getUserMedia)...', '');
+      await stopRawStream();
+      const diag = await gatherDiagnostics();
+      showDiag(diag);
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setScanStatus('Browser tidak mendukung getUserMedia.', 'err');
+        beep(false);
+        return;
+      }
+
+      try{
+        rawStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        camTestVideo.srcObject = rawStream;
+        camTestVideo.style.display = '';
+        setScanStatus('Raw camera OK. Jika ini tampil tapi QR tidak, berarti masalah di html5-qrcode config.', 'ok');
+        beep(true);
+      }catch(e){
+        console.error(e);
+        const msg = e?.message || String(e);
+        setScanStatus('Raw camera gagal: ' + msg, 'err');
+        beep(false);
+      }
+    });
+
+    btnCopyDiag.addEventListener('click', async () => {
+      const diag = await gatherDiagnostics();
+      const txt = JSON.stringify(diag, null, 2);
+      showDiag(txt);
+      try{
+        await navigator.clipboard.writeText(txt);
+        setScanStatus('Diagnostics dicopy ke clipboard.', 'ok');
+      }catch(e){
+        setScanStatus('Tidak bisa copy otomatis. Silakan copy manual dari kotak diagnostics.', 'warn');
+      }
+    });
+
+// init
     init();
   </script>
 </body>
