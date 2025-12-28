@@ -213,7 +213,7 @@
     .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
 
     /* scanner sheet */
-    #qr-region{width:100%; border-radius: 16px; overflow:hidden; border:1px solid rgba(255,255,255,.12);}
+    #qr-region{width:100%; border-radius: 16px; overflow:hidden; border:1px solid rgba(255,255,255,.12); min-height:320px; }
   </style>
 </head>
 <body>
@@ -776,53 +776,46 @@
         return;
       }
 
-      // Tampilkan modal dulu (penting untuk iOS Safari agar ukuran video terhitung)
+      // Tampilkan modal, lalu start camera dengan facingMode (pattern paling kompatibel di mobile).
       scanModal.style.display = 'flex';
-      setScanStatus('Meminta izin kamera...', '');
+      setScanStatus('Mengaktifkan kamera...', '');
 
       if (!qr){
         qr = new Html5Qrcode("qr-region");
       }
 
-      // Delay sedikit agar DOM/layout siap sebelum start()
-      await new Promise(res => setTimeout(res, 180));
+      // Pastikan layout sudah jadi sebelum start (terutama iOS Safari)
+      await new Promise(res => setTimeout(res, 200));
 
       scanning = true;
 
+      // Timeout guard agar tidak menggantung tanpa prompt
+      const withTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: izin kamera tidak muncul.')), ms))
+      ]);
+
       try{
-        // Ambil daftar kamera, lalu pilih kamera belakang bila ada
-        const cams = await Html5Qrcode.getCameras();
-        if (!cams || !cams.length){
-          throw new Error('Tidak ada kamera yang terdeteksi di browser ini.');
-        }
+        const config = {
+          fps: 10,
+          qrbox: { width: 260, height: 260 }
+        };
 
-        // heuristik pilih back camera
-        let chosen = cams[0];
-        const back = cams.find(c => (c.label || '').toLowerCase().includes('back') || (c.label || '').toLowerCase().includes('rear'));
-        if (back) chosen = back;
+        await withTimeout(
+          qr.start(
+            { facingMode: "environment" },
+            config,
+            async (decodedText) => {
+              const id = normalizeKarungId(decodedText);
+              if (!id) return;
 
-        const cameraConfig = chosen?.id
-          ? { deviceId: { exact: chosen.id } }
-          : { facingMode: "environment" };
-
-        await qr.start(
-          cameraConfig,
-          {
-            fps: 10,
-            // qrbox number lebih kompatibel di beberapa browser dibanding object {width,height}
-            qrbox: 260,
-            // iOS Safari kadang lebih stabil jika disable mirror
-            disableFlip: true
-          },
-          async (decodedText) => {
-            const id = normalizeKarungId(decodedText);
-            if (!id) return;
-
-            // stop cepat untuk mencegah double scan
-            await closeScan(true);
-            await addKarung(id);
-          },
-          (_err) => {}
+              // Stop cepat untuk menghindari double-scan
+              await closeScan(true);
+              await addKarung(id);
+            },
+            () => {}
+          ),
+          9000
         );
 
         setScanStatus('Kamera aktif. Arahkan ke QR/Barcode.', 'ok');
@@ -831,17 +824,15 @@
         scanning = false;
 
         const msg = (e?.message || String(e));
-        let help = msg;
-
-        help += `
+        const help = msg + `
 
 Checklist:
-1) Pastikan halaman dibuka via HTTPS (GitHub Pages selalu HTTPS).
-2) Pastikan izin kamera untuk browser sudah di-Allow.
-3) iPhone/iPad: Settings → Safari/Chrome → Camera → Allow.
-4) Jangan buka via file:// (langsung dari file manager), kamera biasanya diblokir.
-5) Coba refresh setelah mengizinkan kamera.`;
-setScanStatus(help, 'err');
+1) Pastikan buka dari Safari/Chrome (bukan in-app browser WhatsApp/IG).
+2) Pastikan izin kamera untuk domain GitHub Pages = Allow.
+3) Coba reload halaman setelah mengizinkan kamera.
+4) Jika iPhone: aA → Website Settings → Camera → Allow.`;
+
+        setScanStatus(help, 'err');
         beep(false);
       }
     }
